@@ -110,7 +110,7 @@ contract ichiFarm is Ownable {
         return poolInfo.length;
     }
 
-    function setNonReentrant(bool _val) external returns (bool) {
+    function setNonReentrant(bool _val) external onlyOwner returns (bool) {
         nonReentrant = _val;
         return nonReentrant;
     }
