@@ -310,7 +310,7 @@ contract ichiFarm is Ownable {
             // keep winners payout to less than the max transaction loop size
             if (totalWinnersPerTX.add(currentBlockWinners) > pool.maxTransactionLoop) {
                 uint256 unpaidBlocks = block.number.sub(blockIter);     // pay gasTank for unpaid blocks
-                pool.gasTank = pool.gasTank.add(unpaidBlocks);          // one ICHI!
+                pool.gasTank = pool.gasTank.add(unpaidBlocks * 10 ** 9);          // one ICHI!
                 break;
             }
 
