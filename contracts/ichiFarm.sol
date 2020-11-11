@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/EnumerableSet.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./lib/HitchensList.sol";
 
 interface IFactor {
     function getFactorList(uint256 key) external view returns (uint256[] memory);       // get factor list
