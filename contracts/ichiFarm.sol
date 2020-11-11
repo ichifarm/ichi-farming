@@ -280,6 +280,7 @@ contract ichiFarm is Ownable {
         PoolInfo storage pool = poolInfo[_poolID];
 
         if (block.number <= pool.lastRewardBonusBlock) {
+            nonReentrant = false;
             return;
         }
 
