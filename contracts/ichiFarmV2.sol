@@ -41,16 +41,16 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
 
     /// @notice Info of each user that stakes LP tokens.
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
-    /// @dev Total allocation points. Must be the sum of all allocation points in all pools.
-    uint256 totalAllocPoint;
+    /// @notice Total allocation points. Must be the sum of all allocation points in all pools.
+    uint256 public totalAllocPoint;
 
     /// @notice ICHI tokens created per block.
     uint256 public ichiPerBlock;
 
-    /// @notice Extra decimals for pool's accIchiPerShare attribute. Needed in order to accomodate different types of LPs.
+    /// @dev Extra decimals for pool's accIchiPerShare attribute. Needed in order to accomodate different types of LPs.
     uint256 private constant ACC_ICHI_PRECISION = 1e18;
 
-    /// @notice nonReentrant flag used to secure functions with external calls.
+    /// @dev nonReentrant flag used to secure functions with external calls.
     bool nonReentrant;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount, address indexed to);
