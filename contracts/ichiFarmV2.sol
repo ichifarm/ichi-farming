@@ -128,7 +128,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 blocks = block.number.sub(pool.lastRewardBlock);
-            uint256 ichiReward = blocks.mul(ichiPerBlock.mul(pool.allocPoint)) / totalAllocPoint;
+            uint256 ichiReward = blocks.mul(ichiPerBlock).mul(pool.allocPoint) / totalAllocPoint;
             accIchiPerShare = accIchiPerShare.add(ichiReward.mul(ACC_ICHI_PRECISION) / lpSupply);
         }
         pending = int256(user.amount.mul(accIchiPerShare) / ACC_ICHI_PRECISION).sub(user.rewardDebt).toUInt256();
@@ -160,7 +160,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
             uint256 lpSupply = lpToken[pid].balanceOf(address(this));
             if (lpSupply > 0) {
                 uint256 blocks = block.number.sub(pool.lastRewardBlock);
-                uint256 ichiReward = blocks.mul(ichiPerBlock.mul(pool.allocPoint)) / totalAllocPoint;
+                uint256 ichiReward = blocks.mul(ichiPerBlock).mul(pool.allocPoint) / totalAllocPoint;
                 pool.accIchiPerShare = pool.accIchiPerShare.add((ichiReward.mul(ACC_ICHI_PRECISION) / lpSupply).to128());
             }
             pool.lastRewardBlock = block.number.to64();
