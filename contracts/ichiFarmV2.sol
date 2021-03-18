@@ -47,7 +47,11 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice ICHI tokens created per block.
     uint256 public ichiPerBlock;
 
+    /// @notice Extra decimals for pool's accIchiPerShare attribute. Needed in order to accomodate different types of LPs.
     uint256 private constant ACC_ICHI_PRECISION = 1e18;
+
+    /// @notice nonReentrant flag used to secure functions with external calls.
+    bool nonReentrant;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount, address indexed to);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount, address indexed to);
@@ -73,6 +77,13 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         if (_withUpdate) {
             massUpdateAllPools();
         }
+    }
+
+    /// @notice Set the nonReentrant flag. Could be used to pause/resume the farm operations. Can only be called by the owner.
+    /// @param _val nonReentrant flag value to be set.
+    function setNonReentrant(bool _val) external onlyOwner returns (bool) {
+        nonReentrant = _val;
+        return nonReentrant;
     }
 
     /// @notice Returns the number of IFV2 pools.
@@ -174,6 +185,9 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param amount LP token amount to deposit.
     /// @param to The receiver of `amount` deposit benefit.
     function deposit(uint256 pid, uint256 amount, address to) public {
+        require(!nonReentrant, "ichiFarmV2::nonReentrant - try again");
+        nonReentrant = true;
+
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][to];
 
@@ -185,6 +199,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         lpToken[pid].safeTransferFrom(msg.sender, address(this), amount);
 
         emit Deposit(msg.sender, pid, amount, to);
+        nonReentrant = false;
     }
 
     /// @notice Withdraw LP tokens from IFV2.
@@ -192,6 +207,9 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param amount LP token amount to withdraw.
     /// @param to Receiver of the LP tokens.
     function withdraw(uint256 pid, uint256 amount, address to) public {
+        require(!nonReentrant, "ichiFarmV2::nonReentrant - try again");
+        nonReentrant = true;
+
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][msg.sender];
 
@@ -203,12 +221,16 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         lpToken[pid].safeTransfer(to, amount);
 
         emit Withdraw(msg.sender, pid, amount, to);
+        nonReentrant = false;
     }
 
     /// @notice Harvest proceeds for transaction sender to `to`.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of ICHI rewards.
     function harvest(uint256 pid, address to) public {
+        require(!nonReentrant, "ichiFarmV2::nonReentrant - try again");
+        nonReentrant = true;
+
         PoolInfo memory pool = updatePool(pid);
         UserInfo storage user = userInfo[pid][msg.sender];
         int256 accumulatedIchi = int256(user.amount.mul(pool.accIchiPerShare) / ACC_ICHI_PRECISION);
@@ -223,6 +245,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         }
 
         emit Harvest(msg.sender, pid, _pendingIchi);
+        nonReentrant = false;
     }
 
     /// @notice Withdraw without caring about rewards. EMERGENCY ONLY.
