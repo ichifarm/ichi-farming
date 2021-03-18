@@ -6,9 +6,9 @@ pragma experimental ABIEncoderV2;
 import "@boringcrypto/boring-solidity/contracts/libraries/BoringMath.sol";
 import "@boringcrypto/boring-solidity/contracts/BoringBatchable.sol";
 import "@boringcrypto/boring-solidity/contracts/BoringOwnable.sol";
-import "./libraries/SignedSafeMath.sol";
+import "./lib/SignedSafeMath.sol";
 
-contract IchiFarmV2 is BoringOwnable, BoringBatchable {
+contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     using BoringMath for uint256;
     using BoringMath128 for uint128;
     using BoringERC20 for IERC20;
@@ -81,8 +81,8 @@ contract IchiFarmV2 is BoringOwnable, BoringBatchable {
     }
 
     /// @notice Returns the ICHI reward value for a specific pool.
-    function ichiReward(uint256 _pid) external view returns (uint256) {
-        return ichiPerBlock.mul(poolInfo[_pid].allocPoint).div(totalAllocPoint);
+    function poolIchiReward(uint256 _pid) external view returns (uint256) {
+        return ichiPerBlock.mul(poolInfo[_pid].allocPoint) / totalAllocPoint;
     }
 
     /// @notice Returns the total number of LPs staked in the farm.
@@ -128,14 +128,14 @@ contract IchiFarmV2 is BoringOwnable, BoringBatchable {
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
         if (block.number > pool.lastRewardBlock && lpSupply != 0) {
             uint256 blocks = block.number.sub(pool.lastRewardBlock);
-            uint256 ichiReward = blocks.mul(ichiPerBlock.mul(pool.allocPoint) / totalAllocPoint;
+            uint256 ichiReward = blocks.mul(ichiPerBlock.mul(pool.allocPoint)) / totalAllocPoint;
             accIchiPerShare = accIchiPerShare.add(ichiReward.mul(ACC_ICHI_PRECISION) / lpSupply);
         }
         pending = int256(user.amount.mul(accIchiPerShare) / ACC_ICHI_PRECISION).sub(user.rewardDebt).toUInt256();
     }
 
     /// @notice Update reward variables for all pools. Be careful of gas spending!
-    function massUpdateAllPools() external {
+    function massUpdateAllPools() public {
         uint256 len = poolInfo.length;
         for (uint256 pid = 0; pid < len; ++pid) {
             updatePool(pid);
@@ -160,7 +160,7 @@ contract IchiFarmV2 is BoringOwnable, BoringBatchable {
             uint256 lpSupply = lpToken[pid].balanceOf(address(this));
             if (lpSupply > 0) {
                 uint256 blocks = block.number.sub(pool.lastRewardBlock);
-                uint256 ichiReward = blocks.mul(ichiPerBlock.mul(pool.allocPoint) / totalAllocPoint;
+                uint256 ichiReward = blocks.mul(ichiPerBlock.mul(pool.allocPoint)) / totalAllocPoint;
                 pool.accIchiPerShare = pool.accIchiPerShare.add((ichiReward.mul(ACC_ICHI_PRECISION) / lpSupply).to128());
             }
             pool.lastRewardBlock = block.number.to64();
@@ -205,16 +205,6 @@ contract IchiFarmV2 is BoringOwnable, BoringBatchable {
         emit Withdraw(msg.sender, pid, amount, to);
     }
 
-    /// @notice Safe ichi transfer function, just in case if rounding error causes pool to not have enough ICHIs.
-    function safeIchiTransfer(address _to, uint256 _amount) internal {
-        uint256 ichiBal = ICHI.balanceOf(address(this));
-        if (_amount > ichiBal) {
-            ICHI.transfer(_to, ichiBal);
-        } else {
-            ICHI.transfer(_to, _amount);
-        }
-    }
-
     /// @notice Harvest proceeds for transaction sender to `to`.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of ICHI rewards.
@@ -223,13 +213,14 @@ contract IchiFarmV2 is BoringOwnable, BoringBatchable {
         UserInfo storage user = userInfo[pid][msg.sender];
         int256 accumulatedIchi = int256(user.amount.mul(pool.accIchiPerShare) / ACC_ICHI_PRECISION);
         uint256 _pendingIchi = accumulatedIchi.sub(user.rewardDebt).toUInt256();
-        if (_pendingIchi == 0) { success = false; }
 
         // Effects
         user.rewardDebt = accumulatedIchi;
 
         // Interactions
-        safeIchiTransfer(to, _pendingIchi);
+        if (_pendingIchi > 0) {
+            ICHI.safeTransfer(to, _pendingIchi);
+        }
 
         emit Harvest(msg.sender, pid, _pendingIchi);
     }
