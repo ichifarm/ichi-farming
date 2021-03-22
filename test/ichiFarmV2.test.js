@@ -42,7 +42,64 @@ describe("ichiFarmV2", function () {
       await expect(this.farm.set(0, 10))
             .to.emit(this.farm, "LogSetPool")
             .withArgs(0, 10)
-      })
+    })
+    it("Changing allocPoints for all pools affect pending rewards", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.farm.add(10, this.lph.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      await this.lph.approve(this.farm.address, getBigNumber(10))
+
+      let l1 = await this.farm.batch(
+        [
+            this.farm.interface.encodeFunctionData("deposit", [0, getBigNumber(2,3), this.alice.address]),
+            this.farm.interface.encodeFunctionData("deposit", [1, getBigNumber(2,3), this.bob.address]),
+        ],
+        true
+      )
+      await time.advanceBlock()
+
+      let l2 = await this.farm.batch(
+        [
+            this.farm.interface.encodeFunctionData("set", [0, 25]),
+            this.farm.interface.encodeFunctionData("set", [1, 75]),
+        ],
+        true
+      )
+      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      pendingIchiForBob = await this.farm.pendingIchi(1, this.bob.address)
+
+      // expected ICHI = ichiPerBlock * [number of blocks] * allocPoints / totalAllocPoints
+      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(25).div(100)
+      let expectedIchiForBob = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(75).div(100)
+      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
+      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+    })
+    it("Changing allocPoints for a pool affect pending rewards for all pools", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.farm.add(10, this.lph.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      await this.lph.approve(this.farm.address, getBigNumber(10))
+
+      let l1 = await this.farm.batch(
+        [
+            this.farm.interface.encodeFunctionData("deposit", [0, getBigNumber(2,3), this.alice.address]),
+            this.farm.interface.encodeFunctionData("deposit", [1, getBigNumber(2,3), this.bob.address]),
+        ],
+        true
+      )
+      await time.advanceBlock()
+
+      let l2 = await this.farm.set(1, 20)
+
+      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      pendingIchiForBob = await this.farm.pendingIchi(1, this.bob.address)
+
+      // expected ICHI = ichiPerBlock * [number of blocks] * allocPoints / totalAllocPoints
+      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(1).div(3)
+      let expectedIchiForBob = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(2).div(3)
+      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
+      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+    })
   })
 
   describe("PendingIchi", function() {
