@@ -322,6 +322,31 @@ describe("ichiFarmV2", function () {
       expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
       expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
     })
+    it("Moving LPs from one acct to another keeps the rewards intact", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      let al1 = await this.farm.deposit(0, getBigNumber(2,3), this.alice.address)
+      let bl1 = await this.farm.deposit(0, getBigNumber(2,3), this.bob.address)
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+      let al2 = await this.farm.withdraw(0, getBigNumber(1,3), this.bob.address)
+      let bl2 = await this.farm.deposit(0, getBigNumber(1,3), this.bob.address)
+      await time.advanceBlock()
+
+      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      pendingIchiForBob = await this.farm.pendingIchi(0, this.bob.address)
+      // expected ICHI = ichiPerBlock * [number of blocks]
+      let expectedIchiForAlice = getBigNumber(1,9).mul(bl1.blockNumber - al1.blockNumber).
+        add(getBigNumber(1,9).mul(al2.blockNumber - bl1.blockNumber).div(2)).
+        add(getBigNumber(1,9).mul(bl2.blockNumber - al2.blockNumber).mul(1).div(3)).
+        add(getBigNumber(1,9).mul(1).div(4))
+      let expectedIchiForBob = getBigNumber(1,9).mul(al2.blockNumber - bl1.blockNumber).div(2).
+        add(getBigNumber(1,9).mul(bl2.blockNumber - al2.blockNumber).mul(2).div(3)).
+        add(getBigNumber(1,9).mul(3).div(4))
+      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
+      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+    })
     it("Deposit to another account", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
