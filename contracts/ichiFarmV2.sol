@@ -31,8 +31,8 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         uint64 allocPoint;
     }
 
-    /// @notice Address of ICHI contract.
-    IERC20 public immutable ICHI;
+    /// @dev Address of ICHI contract.
+    IERC20 private immutable ICHI;
 
     /// @notice Info of each IFV2 pool.
     PoolInfo[] public poolInfo;
@@ -106,7 +106,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// DO NOT add the same LP token more than once. Rewards will be messed up if you do.
     /// @param allocPoint AP of the new pool.
     /// @param _lpToken Address of the LP ERC-20 token.
-    function add(uint256 allocPoint, IERC20 _lpToken) public onlyOwner {
+    function add(uint256 allocPoint, IERC20 _lpToken) external onlyOwner {
         uint256 lastRewardBlock = block.number;
         totalAllocPoint = totalAllocPoint.add(allocPoint);
         lpToken.push(_lpToken);
@@ -122,7 +122,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Update the given pool's ICHI allocation point. Can only be called by the owner.
     /// @param _pid The index of the pool. See `poolInfo`.
     /// @param _allocPoint New AP of the pool.
-    function set(uint256 _pid, uint256 _allocPoint) public onlyOwner {
+    function set(uint256 _pid, uint256 _allocPoint) external onlyOwner {
         totalAllocPoint = totalAllocPoint.sub(poolInfo[_pid].allocPoint).add(_allocPoint);
         poolInfo[_pid].allocPoint = _allocPoint.to64();
         emit LogSetPool(_pid, _allocPoint);
@@ -184,7 +184,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param amount LP token amount to deposit.
     /// @param to The receiver of `amount` deposit benefit.
-    function deposit(uint256 pid, uint256 amount, address to) public {
+    function deposit(uint256 pid, uint256 amount, address to) external {
         require(!nonReentrant, "ichiFarmV2::nonReentrant - try again");
         nonReentrant = true;
 
@@ -206,7 +206,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param amount LP token amount to withdraw.
     /// @param to Receiver of the LP tokens.
-    function withdraw(uint256 pid, uint256 amount, address to) public {
+    function withdraw(uint256 pid, uint256 amount, address to) external {
         require(!nonReentrant, "ichiFarmV2::nonReentrant - try again");
         nonReentrant = true;
 
@@ -227,7 +227,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Harvest proceeds for transaction sender to `to`.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of ICHI rewards.
-    function harvest(uint256 pid, address to) public {
+    function harvest(uint256 pid, address to) external {
         require(!nonReentrant, "ichiFarmV2::nonReentrant - try again");
         nonReentrant = true;
 
