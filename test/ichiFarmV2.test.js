@@ -123,7 +123,7 @@ describe("ichiFarmV2", function () {
   })
 
   describe("setIchiPerBlock", function() {
-    it("Changing ichiPerBlock immediatelly affects rewards", async function () {
+    it("Changing ichiPerBlock with _update flag OFF affects previously accumulated rewards", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
       let l1 = await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
@@ -136,7 +136,23 @@ describe("ichiFarmV2", function () {
       pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
 
       // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchiForAlice = getBigNumber(5,8).mul(l2.blockNumber - l1.blockNumber)
+      let expectedIchiForAlice = getBigNumber(5,8).mul(l2.blockNumber - l1.blockNumber) // using 1/2 ICHI per block here
+      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+    })
+    it("Changing ichiPerBlock with _update flag ON does not affects previously accumulated rewards", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      let l1 = await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+
+      let l2 = await this.farm.setIchiPerBlock(getBigNumber(5,8), true) // halfing ichiPerBlock
+
+      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+
+      // expected ICHI = ichiPerBlock * [number of blocks]
+      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber) // still using 1 ICHI per block here
       expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
     })
     it("Changing ichiPerBlock only affects rewards after the last pool update", async function () {
@@ -152,7 +168,7 @@ describe("ichiFarmV2", function () {
       //console.log(Number(pendingIchiForAlice))
 
       let l2 = await this.farm.updatePool(0)
-      let l3 = await this.farm.setIchiPerBlock(getBigNumber(5,8), true) // halfing ichiPerBlock
+      let l3 = await this.farm.setIchiPerBlock(getBigNumber(5,8), false) // halfing ichiPerBlock
 
       let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
 

@@ -73,10 +73,10 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param _ichiPerBlock ICHI tokens created per block.
     /// @param _withUpdate true if massUpdatePools should be triggered as well.
     function setIchiPerBlock(uint256 _ichiPerBlock, bool _withUpdate) public onlyOwner {
-        ichiPerBlock = _ichiPerBlock;
         if (_withUpdate) {
             massUpdateAllPools();
         }
+        ichiPerBlock = _ichiPerBlock;
     }
 
     /// @notice Set the nonReentrant flag. Could be used to pause/resume the farm operations. Can only be called by the owner.
