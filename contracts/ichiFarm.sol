@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: No License
+
 pragma solidity 0.6.12;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -556,10 +558,6 @@ contract ichiFarm is Ownable {
 
     function getNode(uint256 _poolID, uint256 value) public view returns (uint256, uint256, uint256, bool, uint256, uint256) {
         return poolInfo[_poolID].blockRank.getNode(value);
-    }
-
-    function getValueKeyLength(uint256 _poolID, uint256 value) public view returns (uint256) {
-        return poolInfo[_poolID].blockRank.valueKeyAtIndexLength(value);
     }
     
     function getValueKey(uint256 _poolID, uint256 value, uint256 row) public view returns (address) {
