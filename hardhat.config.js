@@ -61,6 +61,17 @@ module.exports = {
       url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
     },
   },
+  namedAccounts: {
+    deployer: {
+      default: 0,
+    },
+    dev: {
+      // Default to 1
+      default: 1,
+      // dev address mainnet
+      // 1: "",
+    },
+  },
   networks: {
     hardhat: {
       chainId: 31337,
@@ -75,10 +86,13 @@ module.exports = {
     },
     kovan: {
       url: `https://kovan.infura.io/v3/${process.env.INFURA_API_KEY}`,
-      accounts,
+      accounts: [`0x${process.env.KOVAN_PRIVATE_KEY}`],
       chainId: 42,
       live: true,
       saveDeployments: true,
+      tags: ["staging"],
+      gasPrice: 20000000000,
+      gasMultiplier: 2,
     },
     mainnet: {
         url: `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,
