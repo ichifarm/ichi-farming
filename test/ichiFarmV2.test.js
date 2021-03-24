@@ -36,6 +36,26 @@ describe("ichiFarmV2", function () {
     })
   })
 
+  describe("Change Owner", function () {
+    it("Non owner is not allowed to create pools", async function () {
+      const [alice, bob, carol, dev] = await ethers.getSigners();
+
+      try {
+        await this.farm.connect(bob).add(10, this.lps.address)
+      } catch (error) {
+        console.log("Expected Error = "+ error)
+      }
+    })
+    it("Owner changed and can create pools now", async function () {
+      const [alice, bob, carol, dev] = await ethers.getSigners();
+
+      await this.farm.transferOwnership(bob.address, true, true);
+
+      await this.farm.connect(bob).add(10, this.lps.address)
+      expect((await this.farm.poolLength())).to.be.equal(1);
+    })
+  })
+
   describe("Set", function() {
     it("Should emit event LogSetPool", async function () {
       await this.farm.add(10, this.lps.address)
@@ -98,6 +118,47 @@ describe("ichiFarmV2", function () {
       let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(1).div(3)
       let expectedIchiForBob = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(2).div(3)
       expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
+      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+    })
+  })
+
+  describe("setIchiPerBlock", function() {
+    it("Changing ichiPerBlock immediatelly affects rewards", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      let l1 = await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+
+      let l2 = await this.farm.setIchiPerBlock(getBigNumber(5,8), false) // halfing ichiPerBlock
+
+      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+
+      // expected ICHI = ichiPerBlock * [number of blocks]
+      let expectedIchiForAlice = getBigNumber(5,8).mul(l2.blockNumber - l1.blockNumber)
+      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+    })
+    it("Changing ichiPerBlock only affects rewards after the last pool update", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      let l1 = await this.farm.deposit(0, getBigNumber(1,18), this.alice.address)
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+      //let pool0 = await this.farm.poolInfo(0);
+      //console.log(pool0.allocPoint + ',' + pool0.accIchiPerShare + ',' + pool0.lastRewardBlock)
+      //let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      //console.log(Number(pendingIchiForAlice))
+
+      let l2 = await this.farm.updatePool(0)
+      let l3 = await this.farm.setIchiPerBlock(getBigNumber(5,8), true) // halfing ichiPerBlock
+
+      let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+
+      // expected ICHI = ichiPerBlock * [number of blocks]
+      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).
+        add(getBigNumber(5,8).mul(l3.blockNumber - l2.blockNumber))
       expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
     })
   })
