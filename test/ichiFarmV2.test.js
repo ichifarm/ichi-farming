@@ -42,9 +42,11 @@ describe("ichiFarmV2", function () {
 
       try {
         await this.farm.connect(bob).add(10, this.lps.address)
-      } catch (error) {
-        console.log("Expected Error = "+ error)
+      } catch (e) {
+        err = e;
+        console.log("Expected Error = "+ err)
       }
+      assert.equal(err.toString(), "Error: VM Exception while processing transaction: revert Ownable: caller is not the owner")
     })
     it("Owner changed and can create pools now", async function () {
       const [alice, bob, carol, dev] = await ethers.getSigners();
@@ -122,6 +124,38 @@ describe("ichiFarmV2", function () {
     })
   })
 
+  describe("Combining Transactions", function() {
+    it("Claim and Withdraw in one batch", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+
+      let l1 = await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+      await time.advanceBlock()
+
+      let ichiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      let l2 = await this.farm.batch(
+        [
+            this.farm.interface.encodeFunctionData("harvest", [0, this.bob.address]),
+            this.farm.interface.encodeFunctionData("withdraw", [0, getBigNumber(1,3), this.bob.address]),
+        ],
+        true
+      )
+      let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      expect(pendingIchiForAlice).to.be.equal(0)
+
+      let bl = await this.lps.balanceOf(this.bob.address)
+      expect(bl).to.be.equal(getBigNumber(1,3))
+
+      let ichi1 = await this.ichi.balanceOf(this.bob.address)
+      expect(ichi1).to.be.equal(ichiForAlice.add(getBigNumber(1,9)))
+
+    })
+  })
+
   describe("setIchiPerBlock", function() {
     it("Changing ichiPerBlock with _update flag OFF affects previously accumulated rewards", async function () {
       await this.farm.add(10, this.lps.address)
@@ -177,7 +211,17 @@ describe("ichiFarmV2", function () {
         add(getBigNumber(5,8).mul(l3.blockNumber - l2.blockNumber))
       expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
     })
-  })
+    it("setIchiPerBlock emits an event", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
+      await time.advanceBlock()
+
+      await expect(this.farm.setIchiPerBlock(getBigNumber(5,8), false))
+      .to.emit(this.farm, "SetIchiPerBlock")
+      .withArgs(getBigNumber(5,8), false)
+    })
+})
 
   describe("PendingIchi", function() {
     it("PendingIchi should equal ExpectedIchi", async function () {
@@ -266,6 +310,7 @@ describe("ichiFarmV2", function () {
         await this.farm.massUpdatePools([0, 10000]) // pool 10000 doesn't exist
       } catch (e) {
         err = e;
+        console.log("Expected Error = "+ err)
       }
 
       assert.equal(err.toString(), "Error: VM Exception while processing transaction: invalid opcode")
@@ -332,9 +377,24 @@ describe("ichiFarmV2", function () {
             .to.emit(this.farm, "LogPoolAddition")
             .withArgs(1, 10, this.lph.address)
     })
+    it("Should not allow adding the same LP twice", async function () {
+      await expect(this.farm.add(10, this.lps.address))
+            .to.emit(this.farm, "LogPoolAddition")
+            .withArgs(0, 10, this.lps.address)
+      await expect(this.farm.add(10, this.lph.address))
+            .to.emit(this.farm, "LogPoolAddition")
+            .withArgs(1, 10, this.lph.address)
+      try {
+        await this.farm.add(10, this.lps.address)
+      } catch (e) {
+        err = e;
+        console.log("Expected Error = "+ err)
+      }
+
+      assert.equal(err.toString(), "Error: VM Exception while processing transaction: revert ichiFarmV2::there is already a pool with this LP")
+    })
   })
 
-  
   describe("UpdatePool", function () {
     it("Should emit event LogUpdatePool", async function () {
       await this.farm.add(10, this.lps.address)
@@ -359,6 +419,32 @@ describe("ichiFarmV2", function () {
     })
   })
 
+  describe("TotalAllocPoint", function () {
+    it("UpdatePool tolerates totalAllocPoint to be zero, ", async function () {
+      await this.farm.add(0, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
+      await time.advanceBlock()
+      await this.farm.updatePool(0)
+    })
+    it("Pending ICHI and ICHI rewards are 0 when totalAllocPoint is zero, ", async function () {
+      await this.farm.add(0, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
+      await time.advanceBlock()
+      await this.farm.updatePool(0)
+
+      let tap = await this.farm.totalAllocPoint()
+      expect(tap).to.be.equal(0)
+
+      let poolReward = await this.farm.poolIchiReward(0)
+      expect(poolReward).to.be.equal(0)
+
+      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      expect(pendingIchiForAlice).to.be.equal(0)
+    })
+  })
+
   describe("Deposit", function () {
     it("Should emit event Deposit", async function () {
       await this.farm.add(10, this.lps.address)
@@ -373,6 +459,7 @@ describe("ichiFarmV2", function () {
         await this.farm.deposit(1001, getBigNumber(0), this.alice.address)
       } catch (e) {
         err = e;
+        console.log("Expected Error = "+ err)
       }
 
       assert.equal(err.toString(), "Error: VM Exception while processing transaction: invalid opcode")
@@ -748,6 +835,22 @@ describe("ichiFarmV2", function () {
 
       expect(await this.farm.pendingIchi(0, this.bob.address)).to.be.equal(0)
       expect(await this.lps.balanceOf(this.bob.address)).to.be.equal(getBigNumber(1))
+    })
+    it("Cannot withdraw to zero address", async function () {
+      const [alice, bob, carol, dev] = await ethers.getSigners();
+
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(10))
+      await this.farm.deposit(0, getBigNumber(1), this.bob.address)
+      await time.advanceBlock()
+
+      try {
+        await this.farm.connect(this.bob).emergencyWithdraw(0, ADDRESS_ZERO)
+      } catch (e) {
+        err = e;
+        console.log("Expected Error = "+ err)
+      }
+      assert.equal(err.toString(), "Error: VM Exception while processing transaction: revert ichiFarmV2::can\'t withdraw to address zero")
     })
   })
 })
