@@ -38,6 +38,8 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     PoolInfo[] public poolInfo;
     /// @notice Address of the LP token for each IFV2 pool.
     IERC20[] public lpToken;
+    /// @dev List of all added LP tokens.
+    mapping (address => bool) private addedLPs;
 
     /// @notice Info of each user that stakes LP tokens.
     mapping (uint256 => mapping (address => UserInfo)) public userInfo;
@@ -51,7 +53,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     uint256 private constant ACC_ICHI_PRECISION = 1e18;
 
     /// @dev nonReentrant flag used to secure functions with external calls.
-    bool nonReentrant;
+    bool private nonReentrant;
 
     event Deposit(address indexed user, uint256 indexed pid, uint256 amount, address indexed to);
     event Withdraw(address indexed user, uint256 indexed pid, uint256 amount, address indexed to);
@@ -60,6 +62,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     event LogPoolAddition(uint256 indexed pid, uint256 allocPoint, IERC20 indexed lpToken);
     event LogSetPool(uint256 indexed pid, uint256 allocPoint);
     event LogUpdatePool(uint256 indexed pid, uint64 lastRewardBlock, uint256 lpSupply, uint256 accIchiPerShare);
+    event SetIchiPerBlock(uint256 ichiPerBlock, bool withUpdate);
 
     /// @param _ichi The ICHI token contract address.
     /// @param _ichiPerBlock ICHI tokens created per block.
@@ -72,11 +75,12 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Update number of ICHI tokens created per block. Can only be called by the owner.
     /// @param _ichiPerBlock ICHI tokens created per block.
     /// @param _withUpdate true if massUpdatePools should be triggered as well.
-    function setIchiPerBlock(uint256 _ichiPerBlock, bool _withUpdate) public onlyOwner {
+    function setIchiPerBlock(uint256 _ichiPerBlock, bool _withUpdate) external onlyOwner {
         if (_withUpdate) {
             massUpdateAllPools();
         }
         ichiPerBlock = _ichiPerBlock;
+        emit SetIchiPerBlock(_ichiPerBlock, _withUpdate);
     }
 
     /// @notice Set the nonReentrant flag. Could be used to pause/resume the farm operations. Can only be called by the owner.
@@ -93,6 +97,8 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
 
     /// @notice Returns the ICHI reward value for a specific pool.
     function poolIchiReward(uint256 _pid) external view returns (uint256) {
+        if (totalAllocPoint == 0)
+            return 0;
         return ichiPerBlock.mul(poolInfo[_pid].allocPoint) / totalAllocPoint;
     }
 
@@ -107,9 +113,11 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param allocPoint AP of the new pool.
     /// @param _lpToken Address of the LP ERC-20 token.
     function add(uint256 allocPoint, IERC20 _lpToken) external onlyOwner {
+        require(!addedLPs[address(_lpToken)], "ichiFarmV2::there is already a pool with this LP");
         uint256 lastRewardBlock = block.number;
         totalAllocPoint = totalAllocPoint.add(allocPoint);
         lpToken.push(_lpToken);
+        addedLPs[address(_lpToken)] = true;
 
         poolInfo.push(PoolInfo({
             allocPoint: allocPoint.to64(),
@@ -137,10 +145,10 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accIchiPerShare = pool.accIchiPerShare;
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
-        if (block.number > pool.lastRewardBlock && lpSupply != 0) {
+        if (block.number > pool.lastRewardBlock && lpSupply > 0 && totalAllocPoint > 0) {
             uint256 blocks = block.number.sub(pool.lastRewardBlock);
-            uint256 ichiReward = blocks.mul(ichiPerBlock).mul(pool.allocPoint) / totalAllocPoint;
-            accIchiPerShare = accIchiPerShare.add(ichiReward.mul(ACC_ICHI_PRECISION) / lpSupply);
+            accIchiPerShare = accIchiPerShare.add(
+                (blocks.mul(ichiPerBlock).mul(pool.allocPoint).mul(ACC_ICHI_PRECISION) / totalAllocPoint) / lpSupply);
         }
         pending = int256(user.amount.mul(accIchiPerShare) / ACC_ICHI_PRECISION).sub(user.rewardDebt).toUInt256();
     }
@@ -169,10 +177,10 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
         pool = poolInfo[pid];
         if (block.number > pool.lastRewardBlock) {
             uint256 lpSupply = lpToken[pid].balanceOf(address(this));
-            if (lpSupply > 0) {
+            if (lpSupply > 0 && totalAllocPoint > 0) {
                 uint256 blocks = block.number.sub(pool.lastRewardBlock);
-                uint256 ichiReward = blocks.mul(ichiPerBlock).mul(pool.allocPoint) / totalAllocPoint;
-                pool.accIchiPerShare = pool.accIchiPerShare.add((ichiReward.mul(ACC_ICHI_PRECISION) / lpSupply).to128());
+                pool.accIchiPerShare = pool.accIchiPerShare.add(
+                    ((blocks.mul(ichiPerBlock).mul(pool.allocPoint).mul(ACC_ICHI_PRECISION) / totalAllocPoint) / lpSupply).to128());
             }
             pool.lastRewardBlock = block.number.to64();
             poolInfo[pid] = pool;
@@ -252,6 +260,7 @@ contract ichiFarmV2 is BoringOwnable, BoringBatchable {
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of the LP tokens.
     function emergencyWithdraw(uint256 pid, address to) public {
+        require(address(0) != to, "ichiFarmV2::can't withdraw to address zero");
         UserInfo storage user = userInfo[pid][msg.sender];
         uint256 amount = user.amount;
         user.amount = 0;
