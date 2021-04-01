@@ -27,4 +27,4 @@ In addition, ICHI introduces an innovative DAO-like governance model for the ove
 
 ## ICHI Staking Addresses
 - IchiStake: https://etherscan.io/address/0x70605a6457B0A8fBf1EEE896911895296eAB467E
-- IchiBuyer: https://etherscan.io/address/0x4A62552d0896a16cd1607c6eC03Cbde97ed13fd8@
+- IchiBuyer: https://etherscan.io/address/0x4A62552d0896a16cd1607c6eC03Cbde97ed13fd8
