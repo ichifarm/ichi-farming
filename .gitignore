@@ -4,6 +4,9 @@ coverage/
 coverage.json
 package-lock.json
 build/
+
+.DS_Store
+
 # Logs
 logs
 *.log
