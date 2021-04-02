@@ -24,6 +24,7 @@ In addition, ICHI introduces an innovative DAO-like governance model for the ove
 ### 📝 ADDRESSES
 ## Farming Addresses:
 - Farming contract: https://etherscan.io/address/0xcC50953A743B9CE382f423E37b07Efa6F9d9B000
+- Farming v2 (Gas Saver): https://etherscan.io/address/0x275dFE03bc036257Cd0a713EE819Dbd4529739c8
 
 ## ICHI Staking Addresses
 - IchiStake: https://etherscan.io/address/0x70605a6457B0A8fBf1EEE896911895296eAB467E
