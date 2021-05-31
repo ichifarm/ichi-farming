@@ -100,7 +100,7 @@ module.exports = {
         chainId: 1,
         live: true,
         saveDeployments: true,
-        gasPrice: 120 * 1000000000,
+        gasPrice: 165 * 1000000000,
       },
   },
   preprocess: {
