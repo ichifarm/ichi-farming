@@ -75,11 +75,21 @@ module.exports = {
       tags: ["test", "local"]
     },
     goerli: {
-      url: 'https://goerli.infura.io/v3/' + process.env.INFURA_ID,
+      url: 'https://goerli.infura.io/v3/' + process.env.INFURA_API_KEY,
       accounts
     },
+    kovan: {
+      url: `https://kovan.infura.io/v3/${process.env.INFURA_API_KEY}`,
+      accounts: [`0x${process.env.TESTNET_PK}`],
+      chainId: 42,
+      live: true,
+      saveDeployments: true,
+      tags: ["staging"],
+      gasPrice: 20000000000,
+      gasMultiplier: 2,
+    },
     mainnet: {
-      url: 'https://mainnet.infura.io/v3/' + process.env.INFURA_ID,
+      url: 'https://mainnet.infura.io/v3/' + process.env.INFURA_API_KEY,
       accounts
     }
   },
