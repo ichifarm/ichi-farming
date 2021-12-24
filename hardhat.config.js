@@ -15,7 +15,6 @@ require("solidity-coverage")
 require("@nomiclabs/hardhat-ganache")
 require("hardhat-gas-reporter");
 
-
 const { task } = require("hardhat/config")
 
 // This is a sample Hardhat task. To learn how to create your own go to
@@ -56,37 +55,32 @@ module.exports = {
     coinmarketcap: process.env.COINMARKETCAP_API_KEY,
     excludeContracts: ["contracts/mocks/", "contracts/lib/", "contracts/uniswapv2/"],
   },
-  hardhat: {
-    forking: {
-      url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-    },
-  },
   namedAccounts: {
     deployer: {
       default: 0,
     },
     dev: {
-      // Default to 1
       default: 1,
-      // dev address mainnet
-      // 1: "",
     },
   },
   networks: {
     hardhat: {
-      chainId: 31337,
-      accounts,
-    },
-    ropsten: {
-      url: `https://ropsten.infura.io/v3/${process.env.INFURA_API_KEY}`,
-      accounts,
-      chainId: 3,
-      live: true,
+      forking: {
+        url: `https://eth-mainnet.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
+        blockNumber: 13011904
+      },
+      live: false,
       saveDeployments: true,
+      allowUnlimitedContractSize: false,
+      tags: ["test", "local"]
+    },
+    goerli: {
+      url: 'https://goerli.infura.io/v3/' + process.env.INFURA_API_KEY,
+      accounts
     },
     kovan: {
       url: `https://kovan.infura.io/v3/${process.env.INFURA_API_KEY}`,
-      accounts: [`0x${process.env.KOVAN_PRIVATE_KEY}`],
+      accounts: [`0x${process.env.TESTNET_PK}`],
       chainId: 42,
       live: true,
       saveDeployments: true,
@@ -95,13 +89,9 @@ module.exports = {
       gasMultiplier: 2,
     },
     mainnet: {
-        url: `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,
-        accounts: [`0x${process.env.MAINNET_PK}`],
-        chainId: 1,
-        live: true,
-        saveDeployments: true,
-        gasPrice: 165 * 1000000000,
-      },
+      url: 'https://mainnet.infura.io/v3/' + process.env.INFURA_API_KEY,
+      accounts
+    }
   },
   preprocess: {
     eachLine: removeConsoleLog((bre) => bre.network.name !== "hardhat" && bre.network.name !== "localhost"),

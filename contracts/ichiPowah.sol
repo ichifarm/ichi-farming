@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: No License
+
 /**
  *Submitted for verification at Etherscan.io on 2020-09-12
 */

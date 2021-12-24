@@ -1,18 +1,18 @@
 const { expect, assert } = require("chai")
 const { time, prepare, deploy, getBigNumber, ADDRESS_ZERO } = require("./utilities")
 
-const ACC_ICHI_PRECISION = 18
+const ACC_TOKEN_PRECISION = 18
 
 // alice is a default Signer, so assume all calls are made by alice unless it's specified otherwise with "connect"
 
-describe("ichiFarmV2", function () {
+describe("genericFarmV2", function () {
   before(async function () {
-    await prepare(this, ['Ichi', 'ERC20Mock', 'ichiFarmV2'])
+    await prepare(this, ['ERC20Mock', 'genericFarmV2'])
   })
 
   beforeEach(async function () {
     await deploy(this, [
-      ["ichi", this.Ichi],
+      ["token", this.ERC20Mock, ["Token", "Token", getBigNumber(10,64)]]
     ])
 
     // lp_small will represent LPs with low prices (aka UNI/Sushi/Bancor)
@@ -22,13 +22,13 @@ describe("ichiFarmV2", function () {
       ["lph", this.ERC20Mock, ["LP High", "LPH", getBigNumber(10,64)]]
     ])
 
-    expect((await this.ichi.decimals())).to.be.equal(9);
+    expect((await this.token.decimals())).to.be.equal(18);
 
     await deploy(this, [
-        ['farm', this.ichiFarmV2, [this.ichi.address, getBigNumber(1,9)]] // reward = 1 ICHI per block 
+        ['farm', this.genericFarmV2, [this.token.address, getBigNumber(1,18)]] // reward = 1 Token per block 
     ])
 
-    await this.ichi.transfer(this.farm.address, 1000000000000)
+    await this.token.transfer(this.farm.address, getBigNumber(1,18).mul(1000))
   })
 
   describe("PoolLength", function () {
@@ -86,14 +86,13 @@ describe("ichiFarmV2", function () {
         ],
         true
       )
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      pendingIchiForBob = await this.farm.pendingIchi(1, this.bob.address)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
+      pendingRewardForBob = await this.farm.pendingReward(1, this.bob.address)
 
-      // expected ICHI = ichiPerBlock * [number of blocks] * allocPoints / totalAllocPoints
-      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(25).div(100)
-      let expectedIchiForBob = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(75).div(100)
-      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      let expectedRewardForAlice = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber).mul(25).div(100)
+      let expectedRewardForBob = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber).mul(75).div(100)
+      expect(pendingRewardForBob).to.be.equal(expectedRewardForBob)
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
     it("Changing allocPoints for a pool affect pending rewards for all pools", async function () {
       await this.farm.add(10, this.lps.address)
@@ -112,14 +111,13 @@ describe("ichiFarmV2", function () {
 
       let l2 = await this.farm.set(1, 20)
 
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      pendingIchiForBob = await this.farm.pendingIchi(1, this.bob.address)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
+      pendingRewardForBob = await this.farm.pendingReward(1, this.bob.address)
 
-      // expected ICHI = ichiPerBlock * [number of blocks] * allocPoints / totalAllocPoints
-      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(1).div(3)
-      let expectedIchiForBob = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).mul(2).div(3)
-      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      let expectedRewardForAlice = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber).mul(1).div(3)
+      let expectedRewardForBob = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber).mul(2).div(3)
+      expect(pendingRewardForBob).to.be.equal(expectedRewardForBob)
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
   })
 
@@ -135,7 +133,7 @@ describe("ichiFarmV2", function () {
       await time.advanceBlock()
       await time.advanceBlock()
 
-      let ichiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      let rewardForAlice = await this.farm.pendingReward(0, this.alice.address)
       let l2 = await this.farm.batch(
         [
             this.farm.interface.encodeFunctionData("harvest", [0, this.bob.address]),
@@ -143,20 +141,20 @@ describe("ichiFarmV2", function () {
         ],
         true
       )
-      let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      expect(pendingIchiForAlice).to.be.equal(0)
+      let pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
+      expect(pendingRewardForAlice).to.be.equal(0)
 
       let bl = await this.lps.balanceOf(this.bob.address)
       expect(bl).to.be.equal(getBigNumber(1,3))
 
-      let ichi1 = await this.ichi.balanceOf(this.bob.address)
-      expect(ichi1).to.be.equal(ichiForAlice.add(getBigNumber(1,9)))
+      let reward1 = await this.token.balanceOf(this.bob.address)
+      expect(reward1).to.be.equal(rewardForAlice.add(getBigNumber(1,18)))
 
     })
   })
 
-  describe("setIchiPerBlock", function() {
-    it("Changing ichiPerBlock with _update flag OFF affects previously accumulated rewards", async function () {
+  describe("setRewardTokensPerBlock", function() {
+    it("Changing rewardTokensPerBlock with _update flag OFF affects previously accumulated rewards", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
       let l1 = await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
@@ -164,15 +162,14 @@ describe("ichiFarmV2", function () {
       await time.advanceBlock()
       await time.advanceBlock()
 
-      let l2 = await this.farm.setIchiPerBlock(getBigNumber(5,8), false) // halfing ichiPerBlock
+      let l2 = await this.farm.setRewardTokensPerBlock(getBigNumber(5,17), false) // halfing rewardTokensPerBlock
 
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
 
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchiForAlice = getBigNumber(5,8).mul(l2.blockNumber - l1.blockNumber) // using 1/2 ICHI per block here
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      let expectedRewardForAlice = getBigNumber(5,17).mul(l2.blockNumber - l1.blockNumber) // using 1/2 reward token per block here
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
-    it("Changing ichiPerBlock with _update flag ON does not affects previously accumulated rewards", async function () {
+    it("Changing rewardTokensPerBlock with _update flag ON does not affects previously accumulated rewards", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
       let l1 = await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
@@ -180,50 +177,44 @@ describe("ichiFarmV2", function () {
       await time.advanceBlock()
       await time.advanceBlock()
 
-      let l2 = await this.farm.setIchiPerBlock(getBigNumber(5,8), true) // halfing ichiPerBlock
+      let l2 = await this.farm.setRewardTokensPerBlock(getBigNumber(5,17), true) // halfing rewardTokensPerBlock
 
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
 
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber) // still using 1 ICHI per block here
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      let expectedRewardForAlice = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber) // still using 1 reward token per block here
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
-    it("Changing ichiPerBlock only affects rewards after the last pool update", async function () {
+    it("Changing rewardTokensPerBlock only affects rewards after the last pool update", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
       let l1 = await this.farm.deposit(0, getBigNumber(1,18), this.alice.address)
       await time.advanceBlock()
       await time.advanceBlock()
       await time.advanceBlock()
-      //let pool0 = await this.farm.poolInfo(0);
-      //console.log(pool0.allocPoint + ',' + pool0.accIchiPerShare + ',' + pool0.lastRewardBlock)
-      //let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      //console.log(Number(pendingIchiForAlice))
 
       let l2 = await this.farm.updatePool(0)
-      let l3 = await this.farm.setIchiPerBlock(getBigNumber(5,8), false) // halfing ichiPerBlock
+      let l3 = await this.farm.setRewardTokensPerBlock(getBigNumber(5,17), false) // halfing rewardTokensPerBlock
 
-      let pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
+      let pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
 
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchiForAlice = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber).
-        add(getBigNumber(5,8).mul(l3.blockNumber - l2.blockNumber))
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      let expectedRewardForAlice = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber).
+        add(getBigNumber(5,17).mul(l3.blockNumber - l2.blockNumber))
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
-    it("setIchiPerBlock emits an event", async function () {
+    it("setRewardTokensPerBlock emits an event", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
       await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
       await time.advanceBlock()
 
-      await expect(this.farm.setIchiPerBlock(getBigNumber(5,8), false))
-      .to.emit(this.farm, "SetIchiPerBlock")
-      .withArgs(getBigNumber(5,8), false)
+      await expect(this.farm.setRewardTokensPerBlock(getBigNumber(5,17), false))
+      .to.emit(this.farm, "SetRewardTokensPerBlock")
+      .withArgs(getBigNumber(5,17), false)
     })
 })
 
-  describe("PendingIchi", function() {
-    it("PendingIchi should equal ExpectedIchi", async function () {
+  describe("pendingReward", function() {
+    it("pendingReward should equal expectedReward", async function () {
       // create pool
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
@@ -234,10 +225,9 @@ describe("ichiFarmV2", function () {
       let log2 = await this.farm.updatePool(0);
       
       await time.advanceBlock()
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchi = getBigNumber(1,9).mul(log2.blockNumber + 1 - log.blockNumber)
-      let pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
-      expect(pendingIchi).to.be.equal(expectedIchi)
+      let expectedReward = getBigNumber(1,18).mul(log2.blockNumber + 1 - log.blockNumber)
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
+      expect(pendingReward).to.be.equal(expectedReward)
     })
     it("When block is lastRewardBlock", async function () {
       await this.farm.add(10, this.lps.address)
@@ -245,13 +235,13 @@ describe("ichiFarmV2", function () {
       let l1 = await this.farm.deposit(0, getBigNumber(1), this.alice.address)
       await time.advanceBlockTo(l1.blockNumber + 3) // advance 3 blocks ahead
       let l2 = await this.farm.updatePool(0)
-      let expectedIchi = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber)
-      let pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
-      expect(pendingIchi).to.be.equal(expectedIchi)
+      let expectedReward = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber)
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
+      expect(pendingReward).to.be.equal(expectedReward)
     })
   })
 
-  describe("General pool's accIchiPerShare Calculatons", function () {
+  describe("General pool's accRewardTokensPerShare Calculatons", function () {
     it("with one pool", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
@@ -261,8 +251,8 @@ describe("ichiFarmV2", function () {
       await this.farm.updatePool(0)
 
       let pool = await this.farm.poolInfo(0);
-      let accIchiPerShare_decimals = ACC_ICHI_PRECISION - lp_decimals + 9 // 9 for ICHI
-      expect(pool.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals))
+      let accRewardTokensPerShare_decimals = ACC_TOKEN_PRECISION - lp_decimals + 18 // 18 for reward token
+      expect(pool.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals))
     })
     it("with two pools", async function () {
       await this.farm.add(10, this.lps.address)
@@ -282,10 +272,10 @@ describe("ichiFarmV2", function () {
       let pool1 = await this.farm.poolInfo(1);
 
       // 3 blocks between deposit and update for each pool, allocation split in 2 (* 10 / 20) because of 2 pools 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(3,accIchiPerShare_decimals_0).mul(10).div(20))
-      let accIchiPerShare_decimals_1 = ACC_ICHI_PRECISION - lph_decimals + 9 // 9 for ICHI
-      expect(pool1.accIchiPerShare).to.be.equal(getBigNumber(3,accIchiPerShare_decimals_1).mul(10).div(20))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(3,accRewardTokensPerShare_decimals_0).mul(10).div(20))
+      let accRewardTokensPerShare_decimals_1 = ACC_TOKEN_PRECISION - lph_decimals + 18 // 18 for reward token
+      expect(pool1.accRewardTokensPerShare).to.be.equal(getBigNumber(3,accRewardTokensPerShare_decimals_1).mul(10).div(20))
     })
   })
   
@@ -299,8 +289,8 @@ describe("ichiFarmV2", function () {
       await this.farm.massUpdatePools([0])
 
       let pool = await this.farm.poolInfo(0);
-      let accIchiPerShare_decimals = ACC_ICHI_PRECISION - lp_decimals + 9 // 9 for ICHI
-      expect(pool.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals))
+      let accRewardTokensPerShare_decimals = ACC_TOKEN_PRECISION - lp_decimals + 18 // 18 for reward token
+      expect(pool.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals))
     })
 
     it("Updating invalid pools should fail", async function () {
@@ -325,10 +315,10 @@ describe("ichiFarmV2", function () {
 
       // 3 blocks between deposit and update for pool0 and 2 blocks for pool1, 
       // allocation split in 2 (* 10 / 20) because of 2 pools 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(3,accIchiPerShare_decimals_0).mul(10).div(20))
-      let accIchiPerShare_decimals_1 = ACC_ICHI_PRECISION - lph_decimals + 9 // 9 for ICHI
-      expect(pool1.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_1).mul(10).div(20))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(3,accRewardTokensPerShare_decimals_0).mul(10).div(20))
+      let accRewardTokensPerShare_decimals_1 = ACC_TOKEN_PRECISION - lph_decimals + 18 // 18 for reward token
+      expect(pool1.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_1).mul(10).div(20))
     })
   })
 
@@ -351,10 +341,10 @@ describe("ichiFarmV2", function () {
 
       // 3 blocks between deposit and update for pool0 and 2 blocks for pool 1, 
       // allocation split in 2 (* 10 / 20) because of 2 pools 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(3,accIchiPerShare_decimals_0).mul(10).div(20))
-      let accIchiPerShare_decimals_1 = ACC_ICHI_PRECISION - lph_decimals + 9 // 9 for ICHI
-      expect(pool1.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_1).mul(10).div(20))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(3,accRewardTokensPerShare_decimals_0).mul(10).div(20))
+      let accRewardTokensPerShare_decimals_1 = ACC_TOKEN_PRECISION - lph_decimals + 18 // 18 for reward token
+      expect(pool1.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_1).mul(10).div(20))
     })
   })
 
@@ -369,7 +359,7 @@ describe("ichiFarmV2", function () {
             .withArgs(1, 10, this.lph.address)
     })
     it("Should not allow adding the same LP twice", async function () {
-      const msg1 = "ichiFarmV2::there is already a pool with this LP";
+      const msg1 = "genericFarmV2::there is already a pool with this LP";
 
       await expect(this.farm.add(10, this.lps.address))
             .to.emit(this.farm, "LogPoolAddition")
@@ -390,7 +380,7 @@ describe("ichiFarmV2", function () {
             .to.emit(this.farm, "LogUpdatePool")
             .withArgs(0, (await this.farm.poolInfo(0)).lastRewardBlock,
               (await this.lps.balanceOf(this.farm.address)),
-              (await this.farm.poolInfo(0)).accIchiPerShare)
+              (await this.farm.poolInfo(0)).accRewardTokensPerShare)
     })
 
     it("Should take else path", async function () {
@@ -424,19 +414,19 @@ describe("ichiFarmV2", function () {
       let tap = await this.farm.totalAllocPoint()
       expect(tap).to.be.equal(0)
 
-      let poolReward = await this.farm.poolIchiReward(0)
+      let poolReward = await this.farm.poolReward(0)
       expect(poolReward).to.be.equal(0)
 
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      expect(pendingIchiForAlice).to.be.equal(0)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
+      expect(pendingRewardForAlice).to.be.equal(0)
     })
-    it("poolIchiReward, ", async function () {
+    it("poolReward, ", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(10))
       await this.farm.deposit(0, getBigNumber(1,3), this.alice.address)
       await time.advanceBlock()
-      let reward = await this.farm.poolIchiReward(0)
-      expect(reward).to.be.equal(getBigNumber(1,9))
+      let reward = await this.farm.poolReward(0)
+      expect(reward).to.be.equal(getBigNumber(1,18))
     })
   })
 
@@ -469,16 +459,15 @@ describe("ichiFarmV2", function () {
       let bl2 = await this.farm.deposit(0, getBigNumber(4,3), this.bob.address)
       await time.advanceBlock()
 
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      pendingIchiForBob = await this.farm.pendingIchi(0, this.bob.address)
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchiForAlice = getBigNumber(1,9).mul(bl1.blockNumber - al1.blockNumber).
-        add(getBigNumber(1,9).mul(bl2.blockNumber - bl1.blockNumber).div(2)).
-        add(getBigNumber(1,9).mul(1).div(4))
-      let expectedIchiForBob = getBigNumber(1,9).mul(bl2.blockNumber - bl1.blockNumber).div(2).
-        add(getBigNumber(1,9).mul(3).div(4))
-      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
+      pendingRewardForBob = await this.farm.pendingReward(0, this.bob.address)
+      let expectedRewardForAlice = getBigNumber(1,18).mul(bl1.blockNumber - al1.blockNumber).
+        add(getBigNumber(1,18).mul(bl2.blockNumber - bl1.blockNumber).div(2)).
+        add(getBigNumber(1,18).mul(1).div(4))
+      let expectedRewardForBob = getBigNumber(1,18).mul(bl2.blockNumber - bl1.blockNumber).div(2).
+        add(getBigNumber(1,18).mul(3).div(4))
+      expect(pendingRewardForBob).to.be.equal(expectedRewardForBob)
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
     it("Moving LPs from one acct to another keeps the rewards intact", async function () {
       await this.farm.add(10, this.lps.address)
@@ -492,18 +481,17 @@ describe("ichiFarmV2", function () {
       let bl2 = await this.farm.deposit(0, getBigNumber(1,3), this.bob.address)
       await time.advanceBlock()
 
-      pendingIchiForAlice = await this.farm.pendingIchi(0, this.alice.address)
-      pendingIchiForBob = await this.farm.pendingIchi(0, this.bob.address)
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchiForAlice = getBigNumber(1,9).mul(bl1.blockNumber - al1.blockNumber).
-        add(getBigNumber(1,9).mul(al2.blockNumber - bl1.blockNumber).div(2)).
-        add(getBigNumber(1,9).mul(bl2.blockNumber - al2.blockNumber).mul(1).div(3)).
-        add(getBigNumber(1,9).mul(1).div(4))
-      let expectedIchiForBob = getBigNumber(1,9).mul(al2.blockNumber - bl1.blockNumber).div(2).
-        add(getBigNumber(1,9).mul(bl2.blockNumber - al2.blockNumber).mul(2).div(3)).
-        add(getBigNumber(1,9).mul(3).div(4))
-      expect(pendingIchiForBob).to.be.equal(expectedIchiForBob)
-      expect(pendingIchiForAlice).to.be.equal(expectedIchiForAlice)
+      pendingRewardForAlice = await this.farm.pendingReward(0, this.alice.address)
+      pendingRewardForBob = await this.farm.pendingReward(0, this.bob.address)
+      let expectedRewardForAlice = getBigNumber(1,18).mul(bl1.blockNumber - al1.blockNumber).
+        add(getBigNumber(1,18).mul(al2.blockNumber - bl1.blockNumber).div(2)).
+        add(getBigNumber(1,18).mul(bl2.blockNumber - al2.blockNumber).mul(1).div(3)).
+        add(getBigNumber(1,18).mul(1).div(4))
+      let expectedRewardForBob = getBigNumber(1,18).mul(al2.blockNumber - bl1.blockNumber).div(2).
+        add(getBigNumber(1,18).mul(bl2.blockNumber - al2.blockNumber).mul(2).div(3)).
+        add(getBigNumber(1,18).mul(3).div(4))
+      expect(pendingRewardForBob).to.be.equal(expectedRewardForBob)
+      expect(pendingRewardForAlice).to.be.equal(expectedRewardForAlice)
     })
     it("Deposit to another account", async function () {
       await this.farm.add(10, this.lps.address)
@@ -537,7 +525,7 @@ describe("ichiFarmV2", function () {
 
       await this.farm.setNonReentrant(true)
 
-      const msg2 = 'ichiFarmV2::nonReentrant - try again';
+      const msg2 = 'genericFarmV2::nonReentrant - try again';
       await expect(this.farm.deposit(0, getBigNumber(1,3), this.alice.address)).to.be.revertedWith(msg2);
       await expect(this.farm.withdraw(0, getBigNumber(1,3), this.alice.address)).to.be.revertedWith(msg2);
       await expect(this.farm.harvest(0, this.alice.address)).to.be.revertedWith(msg2);
@@ -550,7 +538,7 @@ describe("ichiFarmV2", function () {
   })
 
 
-  describe("accIchiPerShare Calculations for various LPs", function () {
+  describe("accRewardTokensPerShare Calculations for various LPs", function () {
     // approximate LP prices:
     // 1 SLP = $360000
     // 1 1inch LP = $20
@@ -569,14 +557,37 @@ describe("ichiFarmV2", function () {
       let pool0 = await this.farm.poolInfo(0);
 
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).div(lps_value))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_0).div(lps_value))
     })
-    it("SLP $100", async function () {
+    it("Angel Vault $100", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(1,64))
       let lps_decimals = 18
       let num_usd = 100
+      let usd_per_lp = 3600000000
+      let lps_value = getBigNumber(num_usd,lps_decimals).div(usd_per_lp)
+
+      await this.farm.deposit(0, lps_value, this.alice.address)
+      await time.advanceBlock()
+      await this.farm.updatePool(0)
+
+      let pool0 = await this.farm.poolInfo(0);
+
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
+
+      // 2 blocks between deposit and update for pool0 
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      let difference = getBigNumber(pool0.accRewardTokensPerShare,0).sub(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+
+      expect(difference).to.be.lt(getBigNumber(1,17)) 
+      expect(getBigNumber(2,18).sub(pendingReward)).to.be.lt(10) 
+    })
+    it("SLP $1000", async function () {
+      await this.farm.add(10, this.lps.address)
+      await this.lps.approve(this.farm.address, getBigNumber(1,64))
+      let lps_decimals = 18
+      let num_usd = 1000
       let usd_per_lp = 360000
       let lps_value = getBigNumber(num_usd,lps_decimals).div(usd_per_lp)
 
@@ -586,15 +597,14 @@ describe("ichiFarmV2", function () {
 
       let pool0 = await this.farm.poolInfo(0);
 
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
+
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      let difference = getBigNumber(pool0.accIchiPerShare,0).sub(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
-      if (ACC_ICHI_PRECISION == 20) {
-        expect(Number(difference)).to.be.lessThan(10) // slightly less precise version if ACC_ICHI_PRECISION = 20 (not 18)
-      } else {
-        // for ACC_ICHI_PRECISION = 18
-        expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
-      }
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      let difference = getBigNumber(pool0.accRewardTokensPerShare,0).sub(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+
+      expect(difference).to.be.lt(getBigNumber(1,7)) 
+      expect(getBigNumber(2,18).sub(pendingReward)).to.be.lt(10) 
     })
     it("SLP $1,000,000,000", async function () {
       await this.farm.add(10, this.lps.address)
@@ -611,8 +621,8 @@ describe("ichiFarmV2", function () {
       let pool0 = await this.farm.poolInfo(0);
 
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
     })
     it("Balancer $100", async function () {
       await this.farm.add(10, this.lps.address)
@@ -629,8 +639,8 @@ describe("ichiFarmV2", function () {
       let pool0 = await this.farm.poolInfo(0);
 
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
     })
     it("Balancer $1,000,000,000", async function () {
       await this.farm.add(10, this.lps.address)
@@ -647,8 +657,8 @@ describe("ichiFarmV2", function () {
       let pool0 = await this.farm.poolInfo(0);
 
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
     })
     it("1inch $100", async function () {
       await this.farm.add(10, this.lps.address)
@@ -665,8 +675,8 @@ describe("ichiFarmV2", function () {
       let pool0 = await this.farm.poolInfo(0);
 
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
     })
     it("1inch $1,000,000,000", async function () {
       await this.farm.add(10, this.lps.address)
@@ -683,10 +693,10 @@ describe("ichiFarmV2", function () {
       let pool0 = await this.farm.poolInfo(0);
 
       // 2 blocks between deposit and update for pool0 
-      let accIchiPerShare_decimals_0 = ACC_ICHI_PRECISION - lps_decimals + 9 // 9 for ICHI
-      expect(pool0.accIchiPerShare).to.be.equal(getBigNumber(2,accIchiPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
+      let accRewardTokensPerShare_decimals_0 = ACC_TOKEN_PRECISION - lps_decimals + 18 // 18 for reward token
+      expect(pool0.accRewardTokensPerShare).to.be.equal(getBigNumber(2,accRewardTokensPerShare_decimals_0).mul(usd_per_lp).div(num_usd))
     })
-    it("1inch $1,000,000,000, accIchiPerShare > 0", async function () {
+    it("1inch $1,000,000,000, accRewardTokensPerShare > 0", async function () {
       await this.farm.add(10, this.lps.address)
       await this.lps.approve(this.farm.address, getBigNumber(1,64))
       let lps_decimals = 18
@@ -700,7 +710,7 @@ describe("ichiFarmV2", function () {
 
       let pool0 = await this.farm.poolInfo(0);
 
-      expect(Number(pool0.accIchiPerShare)).to.be.greaterThan(0)
+      expect(Number(pool0.accRewardTokensPerShare)).to.be.greaterThan(0)
     })
   })
 
@@ -716,13 +726,12 @@ describe("ichiFarmV2", function () {
       await this.lps.approve(this.farm.address, getBigNumber(10))
       let l1 = await this.farm.deposit(0, getBigNumber(2,3), this.alice.address)
       await time.advanceBlock()
-      let pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
 
       let l2 = await this.farm.withdraw(0, getBigNumber(1,3), this.alice.address)
-      pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchi = getBigNumber(1,9).mul(l2.blockNumber - l1.blockNumber)
-      expect(pendingIchi).to.be.equal(expectedIchi)
+      pendingReward = await this.farm.pendingReward(0, this.alice.address)
+      let expectedReward = getBigNumber(1,18).mul(l2.blockNumber - l1.blockNumber)
+      expect(pendingReward).to.be.equal(expectedReward)
     })
     it("Partial withdraw should not affect pending rewards (with two users)", async function () {
       await this.farm.add(10, this.lps.address)
@@ -732,13 +741,12 @@ describe("ichiFarmV2", function () {
       await time.advanceBlock()
       await time.advanceBlock()
       await time.advanceBlock()
-      let pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
 
       let al2 = await this.farm.withdraw(0, getBigNumber(1,3), this.alice.address)
-      pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchi = getBigNumber(1,9).mul(bl1.blockNumber - al1.blockNumber).add(getBigNumber(1,9).mul(al2.blockNumber - bl1.blockNumber).div(2))
-      expect(pendingIchi).to.be.equal(expectedIchi)
+      pendingReward = await this.farm.pendingReward(0, this.alice.address)
+      let expectedReward = getBigNumber(1,18).mul(bl1.blockNumber - al1.blockNumber).add(getBigNumber(1,18).mul(al2.blockNumber - bl1.blockNumber).div(2))
+      expect(pendingReward).to.be.equal(expectedReward)
     })
     it("Full withdraw leave pending rewards intact", async function () {
       await this.farm.add(10, this.lps.address)
@@ -746,10 +754,9 @@ describe("ichiFarmV2", function () {
       let al1 = await this.farm.deposit(0, getBigNumber(2,3), this.alice.address)
       await time.advanceBlock()
       let al2 = await this.farm.withdraw(0, getBigNumber(2,3), this.alice.address)
-      let pendingIchi = await this.farm.pendingIchi(0, this.alice.address)
-      // expected ICHI = ichiPerBlock * [number of blocks]
-      let expectedIchi = getBigNumber(1,9).mul(al2.blockNumber - al1.blockNumber)
-      expect(pendingIchi).to.be.equal(expectedIchi)
+      let pendingReward = await this.farm.pendingReward(0, this.alice.address)
+      let expectedReward = getBigNumber(1,18).mul(al2.blockNumber - al1.blockNumber)
+      expect(pendingReward).to.be.equal(expectedReward)
     })
     it("Full withdraw leave user with 0 balance", async function () {
       await this.farm.add(10, this.lps.address)
@@ -787,7 +794,7 @@ describe("ichiFarmV2", function () {
   })
 
   describe("Harvest", function () {
-    it("Should give back the correct amount of ICHI and reward", async function () {
+    it("Should give back the correct amount of rewards", async function () {
         const [alice, bob, carol, dev] = await ethers.getSigners();
 
         await this.farm.add(10, this.lps.address)
@@ -797,11 +804,11 @@ describe("ichiFarmV2", function () {
         await time.advanceBlockTo(l1.blockNumber + 3) // advance 3 blocks ahead
         let l2 = await this.farm.updatePool(0)
 
-        let expectedIchi = getBigNumber(1,9).mul(l2.blockNumber + 1 - l1.blockNumber)
+        let expectedReward = getBigNumber(1,18).mul(l2.blockNumber + 1 - l1.blockNumber)
         
         await this.farm.connect(bob).harvest(0, this.bob.address)
-        expect((await this.farm.userInfo(0, this.bob.address)).rewardDebt).to.be.equal(expectedIchi)
-        expect(await this.ichi.balanceOf(this.bob.address)).to.be.equal(expectedIchi)
+        expect((await this.farm.userInfo(0, this.bob.address)).rewardDebt).to.be.equal(expectedReward)
+        expect(await this.token.balanceOf(this.bob.address)).to.be.equal(expectedReward)
     })
     it("Send your harvest to another account", async function () {
       const [alice, bob, carol, dev] = await ethers.getSigners();
@@ -812,19 +819,19 @@ describe("ichiFarmV2", function () {
       await time.advanceBlockTo(l1.blockNumber + 3) // advance 3 blocks ahead
       let l2 = await this.farm.updatePool(0)
 
-      let expectedIchi = getBigNumber(1,9).mul(l2.blockNumber + 1 - l1.blockNumber)
+      let expectedReward = getBigNumber(1,18).mul(l2.blockNumber + 1 - l1.blockNumber)
       
       await this.farm.connect(bob).harvest(0, this.carol.address)
-      expect((await this.farm.userInfo(0, this.bob.address)).rewardDebt).to.be.equal(expectedIchi)
-      expect(await this.ichi.balanceOf(this.bob.address)).to.be.equal(0)
-      expect(await this.ichi.balanceOf(this.carol.address)).to.be.equal(expectedIchi)
+      expect((await this.farm.userInfo(0, this.bob.address)).rewardDebt).to.be.equal(expectedReward)
+      expect(await this.token.balanceOf(this.bob.address)).to.be.equal(0)
+      expect(await this.token.balanceOf(this.carol.address)).to.be.equal(expectedReward)
   })
   it("Harvest with empty user balance", async function () {
       const [alice, bob, carol, dev] = await ethers.getSigners();
 
       await this.farm.add(10, this.lps.address)
       await this.farm.connect(bob).harvest(0, this.bob.address)
-      expect(await this.ichi.balanceOf(this.bob.address)).to.be.equal(0)
+      expect(await this.token.balanceOf(this.bob.address)).to.be.equal(0)
     })
   })
 
@@ -839,7 +846,7 @@ describe("ichiFarmV2", function () {
       .to.emit(this.farm, "EmergencyWithdraw")
       .withArgs(this.bob.address, 0, getBigNumber(1), this.bob.address)
     })
-    it("Balance or LP and pendingIchi are correct after EmergencyWithdraw", async function () {
+    it("Balance or LP and pendingReward are correct after EmergencyWithdraw", async function () {
       const [alice, bob, carol, dev] = await ethers.getSigners();
 
       await this.farm.add(10, this.lps.address)
@@ -849,7 +856,7 @@ describe("ichiFarmV2", function () {
 
       await this.farm.connect(this.bob).emergencyWithdraw(0, this.bob.address)
 
-      expect(await this.farm.pendingIchi(0, this.bob.address)).to.be.equal(0)
+      expect(await this.farm.pendingReward(0, this.bob.address)).to.be.equal(0)
       expect(await this.lps.balanceOf(this.bob.address)).to.be.equal(getBigNumber(1))
     })
     it("Cannot withdraw to zero address", async function () {
@@ -860,7 +867,7 @@ describe("ichiFarmV2", function () {
       await this.farm.deposit(0, getBigNumber(1), this.bob.address)
       await time.advanceBlock()
 
-      const msg1 = "ichiFarmV2::can't withdraw to address zero";
+      const msg1 = "genericFarmV2::can't withdraw to address zero";
 
       await expect(this.farm.connect(this.bob).emergencyWithdraw(0, ADDRESS_ZERO)).to.be.revertedWith(msg1);
     })
