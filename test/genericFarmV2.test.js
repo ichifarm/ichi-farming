@@ -28,6 +28,8 @@ describe("genericFarmV2", function () {
         ['farm', this.genericFarmV2, [this.token.address, getBigNumber(1,18)]] // reward = 1 Token per block 
     ])
 
+    expect((await this.farm.REWARD_TOKEN())).to.be.equal(this.token.address);
+
     await this.token.transfer(this.farm.address, getBigNumber(1,18).mul(1000))
   })
 
