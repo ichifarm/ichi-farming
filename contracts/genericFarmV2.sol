@@ -32,7 +32,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     }
 
     /// @dev Address of Reward Token contract.
-    IERC20 private immutable REWARD_TOKEN;
+    IERC20 public immutable REWARD_TOKEN;
 
     /// @notice Info of each GFV2 pool.
     PoolInfo[] public poolInfo;
