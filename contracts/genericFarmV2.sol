@@ -76,7 +76,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     event LogSetPool(uint256 indexed pid, uint256 allocPoint);
     event LogUpdatePool(uint256 indexed pid, uint64 lastRewardBlock, uint256 lpSupply, uint256 accRewardTokensPerShare);
     event SetRewardTokensPerBlock(uint256 rewardTokensPerBlock, bool withUpdate);
-    event OwnerWithdrawal(address sender, address token, uint256 amount);
+    event OwnerWithdrawal(address sender, address token, uint256 amount, address to);
     event Operating(address sender, bool operating);
 
     modifier closed {
@@ -121,6 +121,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     }
 
     /// @notice Returns the reward value for a specific pool.
+    /// @param _pid pool id
     function poolReward(uint256 _pid) external view returns (uint256) {
         if (totalAllocPoint == 0)
             return 0;
@@ -128,6 +129,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     }
 
     /// @notice Returns the total number of LPs staked in the farm.
+    /// @param _pid pool id
     function getLPSupply(uint256 _pid) external view returns (uint256) {
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
         return lpSupply;
@@ -199,7 +201,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Update reward variables of the given pool.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @return pool Returns the pool that was updated.
-    function updatePool(uint256 pid) public operating returns (PoolInfo memory pool) {
+    function updatePool(uint256 pid) public returns (PoolInfo memory pool) {
         pool = poolInfo[pid];
         if (block.number > pool.lastRewardBlock) {
             uint256 lpSupply = lpToken[pid].balanceOf(address(this));
@@ -240,7 +242,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param amount LP token amount to withdraw.
     /// @param to Receiver of the LP tokens.
-    function withdraw(uint256 pid, uint256 amount, address to) external operating {
+    function withdraw(uint256 pid, uint256 amount, address to) external closed {
         require(!nonReentrant, "genericFarmV2::nonReentrant - try again");
         nonReentrant = true;
 
@@ -285,7 +287,6 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Withdraw without caring about rewards. EMERGENCY ONLY.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of the LP tokens.
-
     function emergencyWithdraw(uint256 pid, address to) public closed {
         require(address(0) != to, "genericFarmV2::can't withdraw to address zero");
         UserInfo storage user = userInfo[pid][msg.sender];
@@ -297,23 +298,18 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
         emit EmergencyWithdraw(msg.sender, pid, amount, to);
     }
 
-    /// @notice Withdraw without caring about internal account. EMERGENCY ONLY.
+    /// @notice Withdraw without caring about internal account. Only Owner. EMERGENCY ONLY.
     /// @param token the currency to withdraw
     /// @param amount the amount to withdraw
-
-    // TODO Add the pool to withdraw from and accounting to avoid totally breaking the contract
-    // OR force an irreversible non-operational state. 
-    // don't make this so complicated that it's useless in an emergency
-    // be sure it's fail-safe and able to ignore accounting irregularities. Recovering funds is top priority. 
-    // permit arbitrary token, reward token withdrawal
-
-    function OwnerWithdraw(address token, uint256 amount) external onlyOwner {
-        IERC20(token).safeTransfer(owner, amount);
-
-        // TODO: consider pushing pid lastRewardBlock to infinity and rewards per share to 0 to prevent further accrual of implied rewards
-        emit OwnerWithdrawal(msg.sender, token, amount);
+    /// @param to receiver address
+    function OwnerWithdraw(address token, uint256 amount, address to) external onlyOwner {
+        require(to != address(0), "genericFarmV2::can't withdraw to address zero");
+        IERC20(token).safeTransfer(to, amount);
+        emit OwnerWithdrawal(msg.sender, token, amount, to);
     }
 
+    /// @notice Set the running/stopped state
+    /// @param operating_ true: normal, false: stopped
     function setOperational(bool operating_) external onlyOwner {
         isOperating = operating_;
         emit Operating(msg.sender, operating_);
