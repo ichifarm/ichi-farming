@@ -8,7 +8,17 @@ import "@boringcrypto/boring-solidity/contracts/BoringBatchable.sol";
 import "@boringcrypto/boring-solidity/contracts/BoringOwnable.sol";
 import "./lib/SignedSafeMath.sol";
 
-contract genericFarmV2 is BoringOwnable, BoringBatchable {
+/**
+
+ Scope of changes
+
+ 1. (WIP) Owner withdraw deposited assets or allocated ICHI-V2
+ 2. Disable user withdrawal
+ 3. Allow user withdrawal with onlyOwner switch
+ 
+ */
+
+contract stakeAndLockFarm is BoringOwnable, BoringBatchable {
     using BoringMath for uint256;
     using BoringMath128 for uint128;
     using BoringERC20 for IERC20;
@@ -30,6 +40,9 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
         uint64 lastRewardBlock;
         uint64 allocPoint;
     }
+
+    /// @dev Accepting deposits or allowing withdrawals
+    bool public isOperating = true;
 
     /// @dev Address of Reward Token contract.
     IERC20 public immutable REWARD_TOKEN;
@@ -63,6 +76,18 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     event LogSetPool(uint256 indexed pid, uint256 allocPoint);
     event LogUpdatePool(uint256 indexed pid, uint64 lastRewardBlock, uint256 lpSupply, uint256 accRewardTokensPerShare);
     event SetRewardTokensPerBlock(uint256 rewardTokensPerBlock, bool withUpdate);
+    event OwnerWithdrawal(address sender, address token, uint256 amount, address to);
+    event Operating(address sender, bool operating);
+
+    modifier closed {
+        require(!isOperating, "stakeAndLockFarm::farm is operating normally. Withdrawals are not permitted.");
+        _;
+    }
+
+    modifier operating {
+        require(isOperating, "stakeAndLockFarm::farm is closed. Please withdraw your deposits");
+        _;
+    }
 
     /// @param _rewardToken The reward token contract address.
     /// @param _rewardTokensPerBlock reward tokens created per block.
@@ -96,6 +121,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     }
 
     /// @notice Returns the reward value for a specific pool.
+    /// @param _pid pool id
     function poolReward(uint256 _pid) external view returns (uint256) {
         if (totalAllocPoint == 0)
             return 0;
@@ -103,6 +129,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     }
 
     /// @notice Returns the total number of LPs staked in the farm.
+    /// @param _pid pool id
     function getLPSupply(uint256 _pid) external view returns (uint256) {
         uint256 lpSupply = lpToken[_pid].balanceOf(address(this));
         return lpSupply;
@@ -113,7 +140,7 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @param allocPoint AP of the new pool.
     /// @param _lpToken Address of the LP ERC-20 token.
     function add(uint256 allocPoint, IERC20 _lpToken) external onlyOwner {
-        require(!addedLPs[address(_lpToken)], "genericFarmV2::there is already a pool with this LP");
+        require(!addedLPs[address(_lpToken)], "stakeAndLockFarm::there is already a pool with this LP");
         uint256 lastRewardBlock = block.number;
         totalAllocPoint = totalAllocPoint.add(allocPoint);
         lpToken.push(_lpToken);
@@ -139,8 +166,9 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice View function to see pending rewards on frontend.
     /// @param _pid The index of the pool. See `poolInfo`.
     /// @param _user Address of user.
-    /// @return pending reward for a given user.
+    /// @return pending reward for a given user. Zero if emergency stop. 
     function pendingReward(uint256 _pid, address _user) external view returns (uint256 pending) {
+        if(!isOperating) return 0;
         PoolInfo memory pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_user];
         uint256 accRewardTokensPerShare = pool.accRewardTokensPerShare;
@@ -192,8 +220,8 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param amount LP token amount to deposit.
     /// @param to The receiver of `amount` deposit benefit.
-    function deposit(uint256 pid, uint256 amount, address to) external {
-        require(!nonReentrant, "genericFarmV2::nonReentrant - try again");
+    function deposit(uint256 pid, uint256 amount, address to) external operating {
+        require(!nonReentrant, "stakeAndLockFarm::nonReentrant - try again");
         nonReentrant = true;
 
         PoolInfo memory pool = updatePool(pid);
@@ -214,8 +242,8 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param amount LP token amount to withdraw.
     /// @param to Receiver of the LP tokens.
-    function withdraw(uint256 pid, uint256 amount, address to) external {
-        require(!nonReentrant, "genericFarmV2::nonReentrant - try again");
+    function withdraw(uint256 pid, uint256 amount, address to) external closed {
+        require(!nonReentrant, "stakeAndLockFarm::nonReentrant - try again");
         nonReentrant = true;
 
         PoolInfo memory pool = updatePool(pid);
@@ -235,8 +263,8 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Harvest proceeds for transaction sender to `to`.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of the rewards.
-    function harvest(uint256 pid, address to) external {
-        require(!nonReentrant, "genericFarmV2::nonReentrant - try again");
+    function harvest(uint256 pid, address to) external operating {
+        require(!nonReentrant, "stakeAndLockFarm::nonReentrant - try again");
         nonReentrant = true;
 
         PoolInfo memory pool = updatePool(pid);
@@ -259,8 +287,8 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
     /// @notice Withdraw without caring about rewards. EMERGENCY ONLY.
     /// @param pid The index of the pool. See `poolInfo`.
     /// @param to Receiver of the LP tokens.
-    function emergencyWithdraw(uint256 pid, address to) public {
-        require(address(0) != to, "genericFarmV2::can't withdraw to address zero");
+    function emergencyWithdraw(uint256 pid, address to) public closed {
+        require(address(0) != to, "stakeAndLockFarm::can't withdraw to address zero");
         UserInfo storage user = userInfo[pid][msg.sender];
         uint256 amount = user.amount;
         user.amount = 0;
@@ -269,4 +297,21 @@ contract genericFarmV2 is BoringOwnable, BoringBatchable {
         lpToken[pid].safeTransfer(to, amount);
         emit EmergencyWithdraw(msg.sender, pid, amount, to);
     }
+
+    /// @notice Withdraw without caring about internal account. Only Owner. EMERGENCY ONLY.
+    /// @param token the currency to withdraw
+    /// @param amount the amount to withdraw
+    /// @param to receiver address
+    function OwnerWithdraw(address token, uint256 amount, address to) external onlyOwner {
+        require(to != address(0), "stakeAndLockFarm::can't withdraw to address zero");
+        IERC20(token).safeTransfer(to, amount);
+        emit OwnerWithdrawal(msg.sender, token, amount, to);
+    }
+
+    /// @notice Set the running/stopped state
+    /// @param operating_ true: normal, false: stopped
+    function setOperational(bool operating_) external onlyOwner {
+        isOperating = operating_;
+        emit Operating(msg.sender, operating_);
+    }    
 }
